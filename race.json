@@ -1,0 +1,76 @@
+{
+  "runner": "Nate",
+  "race": "Devil's Gulch 100",
+  "start": "2026-07-11T05:00:00-07:00",
+  "latest": {
+    "time": "2026-07-11T12:50:00-07:00",
+    "lat": 47.386211,
+    "lon": -120.572096,
+    "gpxMile": 30.9,
+    "courseMileLabel": "30.9",
+    "section": "Approaching Tronsen",
+    "note": "Past Mt. Lillian #2 and continuing toward Tronsen"
+  },
+  "lastUpdatedLabel": "Saturday 12:50 PM",
+  "crewBase": {
+    "name": "Avid Hotel Wenatchee",
+    "city": "Wenatchee, WA"
+  },
+  "messageEmail": "natethegood13@gmail.com",
+  "finishCutoff": "2026-07-12T20:00:00-07:00",
+  "forecast": {
+    "Tronsen": "12:55\u20131:10 PM",
+    "Sand Creek": "3:45\u20134:45 PM",
+    "No. 2 Canyon #1": "7:15\u20138:30 PM",
+    "No. 2 Canyon #2": "11:45 PM\u20131:30 AM",
+    "Devil's Spur #1": "3:30\u20136:30 AM Sun",
+    "Mission Creek #2": "7:00\u201310:30 AM Sun",
+    "Devil's Spur #2": "10:30 AM\u20132:30 PM Sun",
+    "Finish": "1:00\u20134:00 PM Sun"
+  },
+  "checkins": [
+    {
+      "time": "2026-07-11T08:11:00-07:00",
+      "lat": 47.3163,
+      "lon": -120.49665
+    },
+    {
+      "time": "2026-07-11T09:31:00-07:00",
+      "lat": 47.29816,
+      "lon": -120.51979
+    },
+    {
+      "time": "2026-07-11T10:28:00-07:00",
+      "lat": 47.291796,
+      "lon": -120.545533,
+      "speedMph": 3.74,
+      "elevationFt": 5031.3
+    },
+    {
+      "time": "2026-07-11T11:20:00-07:00",
+      "lat": 47.326891,
+      "lon": -120.524976,
+      "speedMph": 2.49,
+      "elevationFt": 5680.77
+    },
+    {
+      "time": "2026-07-11T11:59:00-07:00",
+      "lat": 47.33493,
+      "lon": -120.52923
+    },
+    {
+      "time": "2026-07-11T12:20:00-07:00",
+      "lat": 47.368938,
+      "lon": -120.550468,
+      "speedMph": 5.0,
+      "elevationFt": 4717.49
+    },
+    {
+      "time": "2026-07-11T12:50:00-07:00",
+      "lat": 47.386211,
+      "lon": -120.572096,
+      "speedMph": 3.11,
+      "elevationFt": 4577.66
+    }
+  ]
+}
