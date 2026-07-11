@@ -6,6 +6,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Confirm workflow works
         run: echo "Garmin workflow is recognized"
