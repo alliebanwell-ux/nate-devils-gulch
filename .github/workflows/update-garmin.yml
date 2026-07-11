@@ -1,0 +1,339 @@
+#!/usr/bin/env python3
+"""Fetch a password-protected Garmin MapShare KML feed and update race.json.
+
+The MapShare password is read only from the GitHub Actions secret
+GARMIN_MAPSHARE_PASSWORD. It is never written to the repository.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+RACE_PATH = ROOT / "race.json"
+COURSE_PATH = ROOT / "course.json"
+
+MAPSHARE_ID = os.environ.get("GARMIN_MAPSHARE_ID", "EP9H4").strip()
+PASSWORD = os.environ.get("GARMIN_MAPSHARE_PASSWORD", "")
+USERNAME = os.environ.get("GARMIN_MAPSHARE_USERNAME", MAPSHARE_ID).strip()
+
+PACIFIC_OFFSET = timezone(timedelta(hours=-7))
+
+FEED_URLS = [
+    f"https://share.garmin.com/Feed/Share/{MAPSHARE_ID}",
+    f"https://inreach.garmin.com/Feed/Share/{MAPSHARE_ID}",
+    f"https://explore.garmin.com/Feed/Share/{MAPSHARE_ID}",
+]
+
+
+def fetch_kml() -> bytes:
+    if not PASSWORD:
+        raise RuntimeError("GARMIN_MAPSHARE_PASSWORD secret is missing.")
+
+    now = datetime.now(timezone.utc)
+    params = urllib.parse.urlencode({
+        "d1": (now - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "d2": (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    })
+
+    password_mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+    for base in FEED_URLS:
+        password_mgr.add_password(None, base, USERNAME, PASSWORD)
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPBasicAuthHandler(password_mgr)
+    )
+
+    errors: list[str] = []
+    for base in FEED_URLS:
+        url = f"{base}?{params}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Devils-Gulch-family-tracker/1.0",
+                "Accept": "application/vnd.google-earth.kml+xml, application/xml, text/xml, */*",
+            },
+        )
+        try:
+            with opener.open(req, timeout=30) as response:
+                body = response.read()
+                if b"<kml" not in body.lower():
+                    raise RuntimeError(
+                        f"Garmin returned non-KML content from {base} "
+                        f"({response.headers.get('Content-Type', 'unknown type')})."
+                    )
+                return body
+        except Exception as exc:  # try the next known Garmin host
+            errors.append(f"{base}: {exc}")
+
+    raise RuntimeError("Could not fetch Garmin KML feed:\n" + "\n".join(errors))
+
+
+def parse_time(text: str | None) -> datetime | None:
+    if not text:
+        return None
+    value = text.strip()
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def first_text(element: ET.Element, local_names: set[str]) -> str | None:
+    for child in element.iter():
+        local = child.tag.split("}")[-1]
+        if local in local_names and child.text and child.text.strip():
+            return child.text.strip()
+    return None
+
+
+def parse_latest_point(kml: bytes) -> dict[str, Any]:
+    root = ET.fromstring(kml)
+    candidates: list[dict[str, Any]] = []
+
+    for placemark in root.iter():
+        if placemark.tag.split("}")[-1] != "Placemark":
+            continue
+
+        coord_text = first_text(placemark, {"coordinates"})
+        if not coord_text:
+            continue
+
+        # A point coordinate is lon,lat[,elevation]. Use the final coordinate
+        # if Garmin provides a short path instead of a single point.
+        coordinate = coord_text.replace("\n", " ").split()[-1]
+        pieces = coordinate.split(",")
+        if len(pieces) < 2:
+            continue
+        try:
+            lon = float(pieces[0])
+            lat = float(pieces[1])
+            elevation_m = float(pieces[2]) if len(pieces) > 2 and pieces[2] else None
+        except ValueError:
+            continue
+
+        timestamp = None
+        for tag in {"when", "Time", "time", "Timestamp", "timestamp"}:
+            timestamp = parse_time(first_text(placemark, {tag}))
+            if timestamp:
+                break
+
+        # Garmin often stores useful fields in ExtendedData.
+        data: dict[str, str] = {}
+        for node in placemark.iter():
+            local = node.tag.split("}")[-1]
+            if local == "Data":
+                name = node.attrib.get("name", "")
+                value = first_text(node, {"value"})
+                if name and value:
+                    data[name.lower()] = value
+            elif local == "SimpleData":
+                name = node.attrib.get("name", "")
+                if name and node.text:
+                    data[name.lower()] = node.text.strip()
+
+        if timestamp is None:
+            for key in ("timestamp", "time", "eventtime", "messagetime"):
+                timestamp = parse_time(data.get(key))
+                if timestamp:
+                    break
+
+        speed = None
+        for key in ("speed", "velocity"):
+            try:
+                speed = float(data[key]) if key in data else None
+            except ValueError:
+                pass
+
+        candidates.append({
+            "time": timestamp,
+            "lat": lat,
+            "lon": lon,
+            "elevationMeters": elevation_m,
+            "speed": speed,
+            "data": data,
+        })
+
+    if not candidates:
+        raise RuntimeError("No track points were found in Garmin KML.")
+
+    dated = [c for c in candidates if c["time"] is not None]
+    if dated:
+        latest = max(dated, key=lambda c: c["time"])
+    else:
+        latest = candidates[-1]
+        latest["time"] = datetime.now(timezone.utc)
+
+    if latest["time"].tzinfo is None:
+        latest["time"] = latest["time"].replace(tzinfo=timezone.utc)
+    return latest
+
+
+def haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    radius_miles = 3958.7613
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * radius_miles * math.asin(math.sqrt(a))
+
+
+def snap_to_route(lat: float, lon: float, course: dict[str, Any]) -> tuple[float, float]:
+    route = course["route"]
+    point = min(
+        route,
+        key=lambda p: haversine_miles(lat, lon, float(p["lat"]), float(p["lon"])),
+    )
+    distance = haversine_miles(lat, lon, float(point["lat"]), float(point["lon"]))
+    return float(point["mile"]), distance
+
+
+def format_updated_label(dt: datetime) -> str:
+    local = dt.astimezone(PACIFIC_OFFSET)
+    return local.strftime("%A %-I:%M %p")
+
+
+def infer_section(mile: float, stations: list[dict[str, Any]]) -> tuple[str, str]:
+    passed = [s for s in stations if float(s["gpxMile"]) <= mile]
+    upcoming = [s for s in stations if float(s["gpxMile"]) > mile]
+    previous = passed[-1] if passed else None
+    nxt = upcoming[0] if upcoming else None
+
+    if nxt is None:
+        return "Finish area", "At or beyond the finish"
+    if previous:
+        return f"Between {previous['name']} and {nxt['name']}", f"Heading toward {nxt['name']}"
+    return f"Approaching {nxt['name']}", f"Heading toward {nxt['name']}"
+
+
+def update_forecasts(
+    race: dict[str, Any],
+    course: dict[str, Any],
+    latest_time: datetime,
+    latest_mile: float,
+) -> None:
+    """Shift future ETA windows from recent observed movement.
+
+    This intentionally remains conservative. It uses the recent segment speed
+    only as a calibration signal, then progressively slows it with distance.
+    """
+    checkins = race.get("checkins", [])
+    recent_speeds = [
+        float(c["segmentMph"])
+        for c in checkins[-4:]
+        if c.get("segmentMph") and float(c["segmentMph"]) > 0
+    ]
+    observed = sum(recent_speeds) / len(recent_speeds) if recent_speeds else 3.25
+    observed = max(2.4, min(4.2, observed))
+
+    for station in course["stations"]:
+        station_mile = float(station["gpxMile"])
+        if station_mile <= latest_mile:
+            station["status"] = "passed"
+            continue
+
+        remaining = station_mile - latest_mile
+        fatigue = 1.0 + max(0.0, station_mile - 30.0) * 0.0075
+        effective_speed = observed / fatigue
+        hours = remaining / effective_speed
+
+        # Wider uncertainty later in the race.
+        uncertainty = 0.18 + remaining * 0.012
+        lo = latest_time + timedelta(hours=max(0.0, hours - uncertainty))
+        hi = latest_time + timedelta(hours=hours + uncertainty)
+
+        station["etaLo"] = lo.isoformat()
+        station["etaHi"] = hi.isoformat()
+        if station.get("status") != "finish":
+            station["status"] = "upcoming"
+
+    upcoming = [
+        s for s in course["stations"]
+        if float(s["gpxMile"]) > latest_mile and s.get("status") != "finish"
+    ]
+    if upcoming:
+        upcoming[0]["status"] = "next"
+
+
+def main() -> None:
+    course = json.loads(COURSE_PATH.read_text(encoding="utf-8"))
+    race = json.loads(RACE_PATH.read_text(encoding="utf-8"))
+
+    latest = parse_latest_point(fetch_kml())
+    latest_time = latest["time"].astimezone(PACIFIC_OFFSET)
+    mile, snap_distance = snap_to_route(latest["lat"], latest["lon"], course)
+
+    existing_time = datetime.fromisoformat(race["latest"]["time"])
+    if latest_time <= existing_time:
+        print("Garmin feed has no newer point.")
+        return
+
+    checkins = race.setdefault("checkins", [])
+    previous = checkins[-1] if checkins else race.get("latest")
+    segment_speed = None
+    if previous:
+        prev_time = datetime.fromisoformat(previous["time"])
+        elapsed_hours = (latest_time - prev_time).total_seconds() / 3600
+        prev_mile = float(previous.get("gpxMile", mile))
+        if elapsed_hours > 0 and mile >= prev_mile:
+            segment_speed = (mile - prev_mile) / elapsed_hours
+
+    checkin = {
+        "time": latest_time.isoformat(),
+        "lat": latest["lat"],
+        "lon": latest["lon"],
+        "gpxMile": mile,
+        "snapMeters": snap_distance * 1609.344,
+        "segmentMph": segment_speed,
+    }
+    if latest.get("elevationMeters") is not None:
+        checkin["elevationFeet"] = latest["elevationMeters"] * 3.28084
+    if latest.get("speed") is not None:
+        checkin["deviceSpeed"] = latest["speed"]
+
+    checkins.append(checkin)
+    race["checkins"] = checkins[-100:]
+
+    section, note = infer_section(mile, course["stations"])
+    race["latest"] = {
+        "time": latest_time.isoformat(),
+        "lat": latest["lat"],
+        "lon": latest["lon"],
+        "gpxMile": mile,
+        "courseMileLabel": f"{mile:.1f}",
+        "section": section,
+        "note": note,
+    }
+    race["lastUpdatedLabel"] = format_updated_label(latest_time)
+
+    update_forecasts(race, course, latest_time, mile)
+
+    RACE_PATH.write_text(
+        json.dumps(race, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    COURSE_PATH.write_text(
+        json.dumps(course, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"Updated tracker to {latest_time.isoformat()}, "
+        f"GPX mile {mile:.2f}, snap distance {snap_distance:.3f} mi."
+    )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise
