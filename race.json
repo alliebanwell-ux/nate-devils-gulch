@@ -1,0 +1,68 @@
+{
+  "runner": "Nate",
+  "race": "Devil’s Gulch 100",
+  "start": "2026-07-11T05:00:00-07:00",
+  "latest": {
+    "time": "2026-07-11T11:46:00-07:00",
+    "lat": 47.33493,
+    "lon": -120.52923,
+    "gpxMile": 24.44129755167908,
+    "courseMileLabel": "24.4",
+    "section": "Leaving Mt. Lillian #2",
+    "note": "Heading toward Tronsen"
+  },
+  "checkins": [
+    {
+      "time": "2026-07-11T08:11:00-07:00",
+      "lat": 47.3163,
+      "lon": -120.49665,
+      "gpxMile": 12.519292439571823,
+      "snapMeters": 4.65775464476558,
+      "_idx": 917,
+      "segmentMph": null
+    },
+    {
+      "time": "2026-07-11T09:31:00-07:00",
+      "lat": 47.29816,
+      "lon": -120.51979,
+      "gpxMile": 17.279270032854164,
+      "snapMeters": 41.04026597823736,
+      "_idx": 1209,
+      "segmentMph": 3.569983194961756
+    },
+    {
+      "time": "2026-07-11T10:28:00-07:00",
+      "lat": 47.291796,
+      "lon": -120.545533,
+      "gpxMile": 20.82504938562506,
+      "snapMeters": 7.083444899471145,
+      "_idx": 1365,
+      "segmentMph": 3.7323993187062072
+    },
+    {
+      "time": "2026-07-11T11:20:00-07:00",
+      "lat": 47.326891,
+      "lon": -120.524976,
+      "gpxMile": 23.767282360887947,
+      "snapMeters": 2.0585288305550535,
+      "_idx": 1560,
+      "segmentMph": 3.394884202226407
+    },
+    {
+      "time": "2026-07-11T11:46:00-07:00",
+      "lat": 47.33493,
+      "lon": -120.52923,
+      "gpxMile": 24.44129755167908,
+      "snapMeters": 38.29475268824026,
+      "_idx": 1596,
+      "segmentMph": 1.5554196710564647
+    }
+  ],
+  "crewBase": {
+    "name": "Avid Hotel Wenatchee",
+    "city": "Wenatchee, WA"
+  },
+  "messageEmail": "natethegood13@gmail.com",
+  "lastUpdatedLabel": "Saturday 11:46 AM",
+  "finishCutoff": "2026-07-12T20:00:00-07:00"
+}
