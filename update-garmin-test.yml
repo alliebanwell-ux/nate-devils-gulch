@@ -1,0 +1,129 @@
+name: Test Garmin connection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-garmin:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Test Garmin MapShare feed
+        env:
+          GARMIN_MAPSHARE_ID: EP9H4
+          GARMIN_MAPSHARE_PASSWORD: ${{ secrets.GARMIN_MAPSHARE_PASSWORD }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import urllib.request
+          import xml.etree.ElementTree as ET
+          from datetime import datetime, timedelta, timezone
+
+          mapshare_id = os.environ["GARMIN_MAPSHARE_ID"]
+          password = os.environ.get("GARMIN_MAPSHARE_PASSWORD", "")
+
+          if not password:
+              print("ERROR: GARMIN_MAPSHARE_PASSWORD secret is missing.")
+              sys.exit(1)
+
+          feed_urls = [
+              f"https://share.garmin.com/Feed/Share/{mapshare_id}",
+              f"https://inreach.garmin.com/Feed/Share/{mapshare_id}",
+              f"https://explore.garmin.com/Feed/Share/{mapshare_id}",
+          ]
+
+          now = datetime.now(timezone.utc)
+          query = (
+              "?d1=" + (now - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+              + "&d2=" + (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+          )
+
+          manager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+          for url in feed_urls:
+              manager.add_password(None, url, mapshare_id, password)
+
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPBasicAuthHandler(manager)
+          )
+
+          errors = []
+
+          for base_url in feed_urls:
+              try:
+                  request = urllib.request.Request(
+                      base_url + query,
+                      headers={
+                          "User-Agent": "Devils-Gulch-family-tracker/1.0",
+                          "Accept": "application/vnd.google-earth.kml+xml, application/xml, text/xml, */*",
+                      },
+                  )
+
+                  with opener.open(request, timeout=30) as response:
+                      body = response.read()
+
+                  if b"<kml" not in body.lower():
+                      raise RuntimeError("Garmin responded, but the response was not KML.")
+
+                  root = ET.fromstring(body)
+                  points = []
+
+                  for placemark in root.iter():
+                      if placemark.tag.split("}")[-1] != "Placemark":
+                          continue
+
+                      coordinates = None
+                      timestamp = None
+
+                      for child in placemark.iter():
+                          local = child.tag.split("}")[-1]
+                          if local == "coordinates" and child.text:
+                              coordinates = child.text.strip()
+                          elif local == "when" and child.text:
+                              timestamp = child.text.strip()
+
+                      if not coordinates:
+                          continue
+
+                      coordinate = coordinates.replace("\n", " ").split()[-1]
+                      pieces = coordinate.split(",")
+
+                      if len(pieces) < 2:
+                          continue
+
+                      lon = float(pieces[0])
+                      lat = float(pieces[1])
+                      elevation = pieces[2] if len(pieces) > 2 else ""
+
+                      points.append(
+                          {
+                              "timestamp": timestamp or "unknown",
+                              "lat": lat,
+                              "lon": lon,
+                              "elevation": elevation,
+                          }
+                      )
+
+                  print(f"SUCCESS: Connected to {base_url}")
+                  print(f"Track points found: {len(points)}")
+
+                  if points:
+                      latest = points[-1]
+                      print("Latest point:")
+                      print(f"  Time: {latest['timestamp']}")
+                      print(f"  Latitude: {latest['lat']}")
+                      print(f"  Longitude: {latest['lon']}")
+                      print(f"  Elevation: {latest['elevation']}")
+                  else:
+                      print("Connected successfully, but no track points were returned.")
+
+                  sys.exit(0)
+
+              except Exception as exc:
+                  errors.append(f"{base_url}: {exc}")
+
+          print("ERROR: Could not connect to the Garmin feed.")
+          for error in errors:
+              print(error)
+          sys.exit(1)
+          PY
