@@ -169,10 +169,18 @@ async function main(){
   const pop=document.getElementById("mapPopover");
   const state={
     showStation(i){
-      const s=course.stations[i],factor=1+Number(document.getElementById("paceSlider").value)/100;
-      const lo=s.status==="passed"?s.baseLo:s.baseLo/factor,hi=s.status==="passed"?s.baseHi:s.baseHi/factor;
+      const s=course.stations[i];
+      const factor=1+Number(document.getElementById("paceSlider").value)/100;
+      const baseLo=(new Date(s.etaLo)-latestTime)/60000;
+      const baseHi=(new Date(s.etaHi)-latestTime)/60000;
+      const lo=s.status==="passed"?baseLo:baseLo/factor;
+      const hi=s.status==="passed"?baseHi:baseHi/factor;
       let html=`<strong>${s.name}</strong><span>Course mile ${s.courseMile}</span><span>ETA: ${formatWindow(addMinutes(latestTime,lo),addMinutes(latestTime,hi))}</span>`;
-      if(s.cutoff!==null) html+=`<span>Cutoff: ${formatTime(addMinutes(latestTime,s.cutoff))}</span>`;
+      if(s.cutoff!==null){
+        const cutoffDate=new Date(s.cutoff);
+        const gapMinutes=(cutoffDate-addMinutes(latestTime,hi))/60000;
+        html+=`<span>Cutoff: ${formatTime(cutoffDate)}</span><span>Buffer: ${bufferText(gapMinutes)}</span>`;
+      }
       pop.innerHTML=html;
     }
   };
@@ -201,12 +209,14 @@ async function main(){
       </article>`).join("");
 
     document.getElementById("projectionTable").innerHTML=projected.map(s=>{
-      const cutoff=s.cutoff===null?"—":formatTime(addMinutes(latestTime,s.cutoff));
-      const gap=s.cutoff===null?null:s.cutoff-s.hi;
+      const adjustedHi=addMinutes(latestTime,s.hi);
+      const cutoffDate=s.cutoff===null?null:new Date(s.cutoff);
+      const cutoff=cutoffDate===null?"—":formatTime(cutoffDate);
+      const gap=cutoffDate===null?null:(cutoffDate-adjustedHi)/60000;
       const cls=s.status==="passed"?"passed":s.status==="next"?"next":"";
       const buffer=gap===null?"—":bufferText(gap);
       const bcls=gap===null?"":gap<0?"buffer-danger":gap<120?"buffer-watch":"buffer-good";
-      return `<tr class="${cls}"><td><strong>${s.name}</strong></td><td>${s.courseMile}</td><td>${formatWindow(addMinutes(latestTime,s.lo),addMinutes(latestTime,s.hi))}</td><td>${cutoff}</td><td class="${bcls}">${buffer}</td></tr>`;
+      return `<tr class="${cls}"><td><strong>${s.name}</strong></td><td>${s.courseMile}</td><td>${formatWindow(addMinutes(latestTime,s.lo),adjustedHi)}</td><td>${cutoff}</td><td class="${bcls}">${buffer}</td></tr>`;
     }).join("");
   }
 
@@ -256,3 +266,7 @@ main().catch(err=>{
   console.error(err);
   document.body.insertAdjacentHTML("beforeend",`<div style="padding:16px;color:#a33e31">Tracker data failed to load. Refresh the page.</div>`);
 });
+
+// Reload periodically so an open tracker picks up newly committed Garmin points.
+const AUTO_REFRESH_MS = 2 * 60 * 1000;
+window.setTimeout(() => window.location.reload(), AUTO_REFRESH_MS);
