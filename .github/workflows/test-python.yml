@@ -15,4 +15,6 @@ jobs:
           python-version: "3.12"
 
       - name: Run Python
+        env:
+          GARMIN_MAPSHARE_PASSWORD: ${{ secrets.GARMIN_MAPSHARE_PASSWORD }}
         run: python scripts/update_garmin.py
