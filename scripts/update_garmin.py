@@ -269,6 +269,12 @@ def planned_speed_for_current_leg(stations: list[dict], current_mile: float) -> 
 
 
 def recalculate_etas(course: dict, race: dict, current_time: datetime, current_mile: float) -> None:
+    """Recalculate future ETAs with tight, non-alarming confidence windows.
+
+    The arrival midpoint follows the terrain-adjusted planned segments calibrated
+    to recent route speed. Window width grows modestly with distance, but is capped:
+    about ±12 minutes for the next stop and never more than ±40 minutes at finish.
+    """
     stations = sorted(course["stations"], key=lambda station: station["gpxMile"])
     ensure_plan_fields(stations)
 
@@ -282,57 +288,60 @@ def recalculate_etas(course: dict, race: dict, current_time: datetime, current_m
     else:
         pace_factor = 1.0
 
-    # Keep one noisy Garmin interval from making the forecast absurd.
-    pace_factor = max(0.72, min(1.65, pace_factor))
+    # Prevent one noisy interval from distorting the whole race forecast.
+    pace_factor = max(0.78, min(1.45, pace_factor))
 
     previous_plan_mile = 0.0
-    previous_plan_lo = datetime.fromisoformat(race["start"])
-    previous_plan_hi = previous_plan_lo
-    cumulative_lo = 0.0
-    cumulative_hi = 0.0
+    previous_plan_mid = datetime.fromisoformat(race["start"])
+    cumulative_minutes = 0.0
+    future_index = 0
 
     for station in stations:
         plan_lo = datetime.fromisoformat(station["planEtaLo"])
         plan_hi = datetime.fromisoformat(station["planEtaHi"])
+        plan_mid = plan_lo + (plan_hi - plan_lo) / 2
 
         if station["gpxMile"] <= current_mile + 0.15:
-            # Passed stations retain their recorded/planned display values.
             previous_plan_mile = station["gpxMile"]
-            previous_plan_lo = plan_lo
-            previous_plan_hi = plan_hi
+            previous_plan_mid = plan_mid
             continue
 
         leg_distance = station["gpxMile"] - previous_plan_mile
         remaining_leg_distance = station["gpxMile"] - max(current_mile, previous_plan_mile)
-        fraction = 1.0 if leg_distance <= 0 else max(0.0, min(1.0, remaining_leg_distance / leg_distance))
+        fraction = 1.0 if leg_distance <= 0 else max(
+            0.0, min(1.0, remaining_leg_distance / leg_distance)
+        )
 
-        base_leg_lo = max(1.0, (plan_lo - previous_plan_lo).total_seconds() / 60)
-        base_leg_hi = max(base_leg_lo, (plan_hi - previous_plan_hi).total_seconds() / 60)
+        planned_leg_minutes = max(
+            1.0, (plan_mid - previous_plan_mid).total_seconds() / 60
+        )
+        cumulative_minutes += planned_leg_minutes * fraction * pace_factor
 
-        leg_lo = base_leg_lo * fraction * pace_factor
-        leg_hi = base_leg_hi * fraction * pace_factor
+        midpoint = current_time + timedelta(minutes=cumulative_minutes)
+        distance_ahead = max(0.0, station["gpxMile"] - current_mile)
 
-        # Add modest uncertainty as the forecast gets farther into the future.
-        cumulative_distance = station["gpxMile"] - current_mile
-        uncertainty = min(75.0, max(5.0, cumulative_distance * 0.7))
-        leg_lo = max(1.0, leg_lo - uncertainty * 0.20)
-        leg_hi = max(leg_lo + 5.0, leg_hi + uncertainty * 0.45)
+        # Tight near-term windows; gradual widening; hard cap at finish.
+        if future_index == 0:
+            half_width = 12.0
+        else:
+            half_width = min(35.0, 12.0 + distance_ahead * 0.28)
 
-        cumulative_lo += leg_lo
-        cumulative_hi += leg_hi
+        if station["name"] == "Finish":
+            half_width = min(40.0, max(25.0, half_width))
 
-        station["etaLo"] = (current_time + timedelta(minutes=cumulative_lo)).isoformat()
-        station["etaHi"] = (current_time + timedelta(minutes=cumulative_hi)).isoformat()
+        station["etaLo"] = (midpoint - timedelta(minutes=half_width)).isoformat()
+        station["etaHi"] = (midpoint + timedelta(minutes=half_width)).isoformat()
 
         previous_plan_mile = station["gpxMile"]
-        previous_plan_lo = plan_lo
-        previous_plan_hi = plan_hi
+        previous_plan_mid = plan_mid
+        future_index += 1
 
     race["forecast"] = {
         "updatedAt": current_time.isoformat(),
         "observedRecentMph": round(observed_speed, 2) if observed_speed else None,
         "paceFactor": round(pace_factor, 3),
-        "method": "terrain-adjusted planned segments calibrated to recent route speed",
+        "method": "terrain-adjusted midpoint with capped confidence windows",
+        "maxFinishWindowMinutes": 80,
     }
 
 
