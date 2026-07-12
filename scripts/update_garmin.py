@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Update race.json and course.json from a Garmin MapShare Raw KML feed."""
+"""Update race.json and course.json from a Garmin MapShare Raw KML feed.
+
+This version also recalculates all future ETA windows after every new Garmin point.
+"""
 
 from __future__ import annotations
 
@@ -9,12 +12,13 @@ import math
 import re
 import sys
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 KML_NS = {"k": "http://www.opengis.net/kml/2.2"}
 PACIFIC = ZoneInfo("America/Los_Angeles")
+UTC = ZoneInfo("UTC")
 
 
 def load_json(path: Path) -> dict:
@@ -56,6 +60,7 @@ def parse_garmin_kml(path: Path) -> dict:
 
         lat = first_number(values.get("Latitude"))
         lon = first_number(values.get("Longitude"))
+
         if lat is None or lon is None:
             coordinate_text = placemark.findtext(
                 ".//k:Point/k:coordinates", default="", namespaces=KML_NS
@@ -69,7 +74,7 @@ def parse_garmin_kml(path: Path) -> dict:
 
         timestamp = datetime.strptime(
             values["Time UTC"], "%m/%d/%Y %I:%M:%S %p"
-        ).replace(tzinfo=ZoneInfo("UTC"))
+        ).replace(tzinfo=UTC)
 
         elevation_m = first_number(values.get("Elevation"))
         velocity_kph = first_number(values.get("Velocity"))
@@ -102,13 +107,13 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def snap_to_route(point: dict, route: list[dict], previous_mile: float) -> dict:
-    # This course crosses itself repeatedly. Prefer plausible forward progress and
-    # reject route points far behind or implausibly far ahead of the prior ping.
+def snap_to_route(point: dict, route: list[dict], previous_mile: float, elapsed_hours: float) -> dict:
+    # Limit forward progress using elapsed time. Even 8 mph is generous for this course.
+    plausible_forward = max(1.5, min(8.0, elapsed_hours * 8.0 + 0.75))
     candidates = [
         route_point
         for route_point in route
-        if previous_mile - 0.35 <= route_point["mile"] <= previous_mile + 8.0
+        if previous_mile - 0.35 <= route_point["mile"] <= previous_mile + plausible_forward
     ]
     if not candidates:
         candidates = route
@@ -185,6 +190,152 @@ def current_section(stations: list[dict], current_gpx_mile: float) -> tuple[str,
     return ("Final approach", "Moving toward the finish")
 
 
+def ensure_plan_fields(stations: list[dict]) -> None:
+    """Preserve the original planned ETA windows as immutable calibration data."""
+    for station in stations:
+        station.setdefault("planEtaLo", station["etaLo"])
+        station.setdefault("planEtaHi", station["etaHi"])
+
+
+def weighted_recent_speed(checkins: list[dict], now: datetime, current_mile: float) -> float | None:
+    """Estimate recent moving speed from route progress, favoring the last 2–3 hours."""
+    valid = []
+    for item in checkins:
+        try:
+            t = datetime.fromisoformat(item["time"])
+            mile = float(item["gpxMile"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        age_hours = (now - t).total_seconds() / 3600
+        if 0 <= age_hours <= 4.0 and mile <= current_mile + 0.2:
+            valid.append((t, mile))
+
+    valid.sort()
+    if len(valid) < 2:
+        return None
+
+    samples = []
+    for i in range(1, len(valid)):
+        t0, m0 = valid[i - 1]
+        t1, m1 = valid[i]
+        hours = (t1 - t0).total_seconds() / 3600
+        miles = m1 - m0
+        if hours <= 0 or miles < -0.2:
+            continue
+        speed = max(0.4, min(7.0, miles / hours))
+        recency_weight = 1.0 + i / len(valid)
+        duration_weight = min(1.5, max(0.25, hours))
+        samples.append((speed, recency_weight * duration_weight))
+
+    if not samples:
+        return None
+
+    return sum(speed * weight for speed, weight in samples) / sum(weight for _, weight in samples)
+
+
+def planned_speed_for_current_leg(stations: list[dict], current_mile: float) -> float | None:
+    ordered = sorted(stations, key=lambda station: station["gpxMile"])
+    previous = {"gpxMile": 0.0, "planEtaLo": None, "planEtaHi": None}
+    next_station = None
+
+    for station in ordered:
+        if station["gpxMile"] <= current_mile:
+            previous = station
+        else:
+            next_station = station
+            break
+
+    if next_station is None:
+        return None
+
+    if previous["planEtaLo"] is None:
+        # Use race start for the first leg.
+        return None
+
+    prev_mid = (
+        datetime.fromisoformat(previous["planEtaLo"])
+        + (datetime.fromisoformat(previous["planEtaHi"]) - datetime.fromisoformat(previous["planEtaLo"])) / 2
+    )
+    next_mid = (
+        datetime.fromisoformat(next_station["planEtaLo"])
+        + (datetime.fromisoformat(next_station["planEtaHi"]) - datetime.fromisoformat(next_station["planEtaLo"])) / 2
+    )
+    hours = (next_mid - prev_mid).total_seconds() / 3600
+    distance = next_station["gpxMile"] - previous["gpxMile"]
+
+    if hours <= 0 or distance <= 0:
+        return None
+    return distance / hours
+
+
+def recalculate_etas(course: dict, race: dict, current_time: datetime, current_mile: float) -> None:
+    stations = sorted(course["stations"], key=lambda station: station["gpxMile"])
+    ensure_plan_fields(stations)
+
+    observed_speed = weighted_recent_speed(
+        race.get("checkins", []), current_time, current_mile
+    )
+    planned_speed = planned_speed_for_current_leg(stations, current_mile)
+
+    if observed_speed and planned_speed:
+        pace_factor = planned_speed / observed_speed
+    else:
+        pace_factor = 1.0
+
+    # Keep one noisy Garmin interval from making the forecast absurd.
+    pace_factor = max(0.72, min(1.65, pace_factor))
+
+    previous_plan_mile = 0.0
+    previous_plan_lo = datetime.fromisoformat(race["start"])
+    previous_plan_hi = previous_plan_lo
+    cumulative_lo = 0.0
+    cumulative_hi = 0.0
+
+    for station in stations:
+        plan_lo = datetime.fromisoformat(station["planEtaLo"])
+        plan_hi = datetime.fromisoformat(station["planEtaHi"])
+
+        if station["gpxMile"] <= current_mile + 0.15:
+            # Passed stations retain their recorded/planned display values.
+            previous_plan_mile = station["gpxMile"]
+            previous_plan_lo = plan_lo
+            previous_plan_hi = plan_hi
+            continue
+
+        leg_distance = station["gpxMile"] - previous_plan_mile
+        remaining_leg_distance = station["gpxMile"] - max(current_mile, previous_plan_mile)
+        fraction = 1.0 if leg_distance <= 0 else max(0.0, min(1.0, remaining_leg_distance / leg_distance))
+
+        base_leg_lo = max(1.0, (plan_lo - previous_plan_lo).total_seconds() / 60)
+        base_leg_hi = max(base_leg_lo, (plan_hi - previous_plan_hi).total_seconds() / 60)
+
+        leg_lo = base_leg_lo * fraction * pace_factor
+        leg_hi = base_leg_hi * fraction * pace_factor
+
+        # Add modest uncertainty as the forecast gets farther into the future.
+        cumulative_distance = station["gpxMile"] - current_mile
+        uncertainty = min(75.0, max(5.0, cumulative_distance * 0.7))
+        leg_lo = max(1.0, leg_lo - uncertainty * 0.20)
+        leg_hi = max(leg_lo + 5.0, leg_hi + uncertainty * 0.45)
+
+        cumulative_lo += leg_lo
+        cumulative_hi += leg_hi
+
+        station["etaLo"] = (current_time + timedelta(minutes=cumulative_lo)).isoformat()
+        station["etaHi"] = (current_time + timedelta(minutes=cumulative_hi)).isoformat()
+
+        previous_plan_mile = station["gpxMile"]
+        previous_plan_lo = plan_lo
+        previous_plan_hi = plan_hi
+
+    race["forecast"] = {
+        "updatedAt": current_time.isoformat(),
+        "observedRecentMph": round(observed_speed, 2) if observed_speed else None,
+        "paceFactor": round(pace_factor, 3),
+        "method": "terrain-adjusted planned segments calibrated to recent route speed",
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--kml", default="feed.kml")
@@ -208,9 +359,9 @@ def main() -> int:
         return 0
 
     previous_mile = float(race["latest"]["gpxMile"])
-    snapped = snap_to_route(point, course["route"], previous_mile)
+    elapsed_hours = max(0.01, (new_time - old_time).total_seconds() / 3600)
+    snapped = snap_to_route(point, course["route"], previous_mile, elapsed_hours)
 
-    # Prevent an obviously bad route match from publishing.
     if snapped["snapMeters"] > 300:
         raise RuntimeError(
             f'Closest plausible course point is {snapped["snapMeters"]:.0f} m away; '
@@ -219,12 +370,7 @@ def main() -> int:
     if snapped["mile"] < previous_mile - 0.35:
         raise RuntimeError("New route match moves too far backward; refusing update.")
 
-    elapsed_hours = (new_time - old_time).total_seconds() / 3600
-    segment_mph = (
-        (snapped["mile"] - previous_mile) / elapsed_hours
-        if elapsed_hours > 0
-        else None
-    )
+    segment_mph = (snapped["mile"] - previous_mile) / elapsed_hours
 
     update_station_statuses(course["stations"], snapped["mile"])
     section, note = current_section(course["stations"], snapped["mile"])
@@ -259,12 +405,19 @@ def main() -> int:
     }
     race["lastUpdatedLabel"] = new_time.strftime("%A %-I:%M %p")
 
+    recalculate_etas(course, race, new_time, snapped["mile"])
+
     save_json(race_path, race)
     save_json(course_path, course)
 
     print(
         f'Updated to {new_time.isoformat()} | GPX mile {snapped["mile"]:.2f} | '
         f'course mile {display_mile:.1f} | snap {snapped["snapMeters"]:.1f} m'
+    )
+    forecast = race.get("forecast", {})
+    print(
+        f'Forecast calibration: recent speed={forecast.get("observedRecentMph")} mph, '
+        f'pace factor={forecast.get("paceFactor")}'
     )
     return 0
 
