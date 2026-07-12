@@ -3,12 +3,12 @@
   "race": "Devil’s Gulch 100",
   "start": "2026-07-11T05:00:00-07:00",
   "latest": {
-    "time": "2026-07-11T18:31:30-07:00",
-    "lat": 47.373271,
-    "lon": -120.475666,
-    "gpxMile": 46.947823096531565,
-    "courseMile": 49.45,
-    "courseMileLabel": "49.5",
+    "time": "2026-07-11T18:51:30-07:00",
+    "lat": 47.369345,
+    "lon": -120.455368,
+    "gpxMile": 48.076903979583555,
+    "courseMile": 50.654,
+    "courseMileLabel": "50.7",
     "section": "Mission Creek #1 → Peavine Water #1",
     "note": "Past Mission Creek #1; moving toward Peavine Water #1"
   },
@@ -152,6 +152,16 @@
       "segmentMph": 3.557984909643878,
       "deviceSpeedMph": 3.106855,
       "elevationFt": 2064.46857
+    },
+    {
+      "time": "2026-07-11T18:51:30-07:00",
+      "lat": 47.369345,
+      "lon": -120.455368,
+      "gpxMile": 48.076903979583555,
+      "snapMeters": 17.691440594490448,
+      "segmentMph": 3.387242649155972,
+      "deviceSpeedMph": 2.485484,
+      "elevationFt": 2402.9856412
     }
   ],
   "crewBase": {
@@ -159,12 +169,12 @@
     "city": "Wenatchee, WA"
   },
   "messageEmail": "natethegood13@gmail.com",
-  "lastUpdatedLabel": "Saturday 6:31 PM",
+  "lastUpdatedLabel": "Saturday 6:51 PM",
   "finishCutoff": "2026-07-12T20:00:00-07:00",
   "forecast": {
-    "updatedAt": "2026-07-11T18:31:30-07:00",
-    "observedRecentMph": 3.01,
-    "paceFactor": 1.151,
+    "updatedAt": "2026-07-11T18:51:30-07:00",
+    "observedRecentMph": 3.06,
+    "paceFactor": 1.131,
     "method": "terrain-adjusted midpoint with capped confidence windows",
     "maxFinishWindowMinutes": 80
   }
