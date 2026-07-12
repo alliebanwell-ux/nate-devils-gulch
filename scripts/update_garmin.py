@@ -399,6 +399,7 @@ def main() -> int:
         "lat": point["lat"],
         "lon": point["lon"],
         "gpxMile": snapped["mile"],
+        "courseMile": round(display_mile, 3),
         "courseMileLabel": f"{display_mile:.1f}",
         "section": section,
         "note": note,
