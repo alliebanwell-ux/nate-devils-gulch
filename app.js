@@ -186,15 +186,18 @@ async function main(){
   race.latest.note=liveSection.note;
 
   const latestTime = new Date(race.latest.time);
-  const pct=Math.round(race.latest.gpxMile/course.totalGpxMiles*100);
+  const displayedCourseMile = Number(race.latest.courseMileLabel);
+  const finishStation = course.stations.find(s => s.name === "Finish") || course.stations[course.stations.length - 1];
+  const totalCourseMiles = Number(finishStation.courseMile);
+  const pct = Math.max(0, Math.min(100, Math.round(displayedCourseMile / totalCourseMiles * 100)));
   document.getElementById("runnerName").textContent=race.runner;
-  document.getElementById("currentMile").textContent=race.latest.courseMileLabel;
+  document.getElementById("currentMile").textContent=displayedCourseMile.toFixed(1);
   document.getElementById("lastUpdated").textContent=race.lastUpdatedLabel;
   document.getElementById("currentSection").textContent=race.latest.section;
   document.getElementById("currentNote").textContent=race.latest.note;
   document.getElementById("progressPercent").textContent=pct;
-  document.getElementById("progressMiles").textContent=race.latest.gpxMile.toFixed(1);
-  document.getElementById("totalMiles").textContent=course.totalGpxMiles.toFixed(1);
+  document.getElementById("progressMiles").textContent=displayedCourseMile.toFixed(1);
+  document.getElementById("totalMiles").textContent=totalCourseMiles.toFixed(1);
   document.getElementById("progressFill").style.width=`${pct}%`;
   document.getElementById("glancePing").textContent=latestTime.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   document.getElementById("glanceMile").textContent=race.latest.courseMileLabel;
@@ -258,7 +261,7 @@ async function main(){
   document.getElementById("paceSlider").addEventListener("input",renderPace);
   renderPace();
 
-  buildElevation(document.getElementById("elevationChart"),race.latest.gpxMile);
+  buildElevation(document.getElementById("elevationChart"),displayedCourseMile);
   initMap(document.getElementById("courseMap"),course,race,state);
   document.getElementById("zoomIn").onclick=()=>state.zoomIn();
   document.getElementById("zoomOut").onclick=()=>state.zoomOut();
