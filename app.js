@@ -1,6 +1,6 @@
 "use strict";
 
-const DATA_REFRESH_MS = 2 * 60 * 1000;
+const DATA_REFRESH_MS = 60 * 1000;
 
 async function loadJSON(path) {
   const response = await fetch(`${path}?v=${Date.now()}`, { cache: "no-store" });
@@ -254,19 +254,70 @@ function buildMap(svg, course, race, stations, state) {
   });
 
   const runner = project(race.latest.lat, race.latest.lon, bounds, width, height);
+  const nextStation = stations.find((station) => station.status === "next");
+  if (nextStation) {
+    const nextPoint = project(nextStation.lat, nextStation.lon, bounds, width, height);
+    svg.append(
+      svgElement("line", {
+        x1: runner.x,
+        y1: runner.y,
+        x2: nextPoint.x,
+        y2: nextPoint.y,
+        stroke: "#c48b2c",
+        "stroke-width": "5",
+        "stroke-dasharray": "10 9",
+        "stroke-linecap": "round",
+        opacity: "0.95",
+      })
+    );
+  }
+
   svg.append(
     svgElement("circle", {
-      cx: runner.x, cy: runner.y, r: 22,
+      cx: runner.x, cy: runner.y, r: 24,
       fill: "none", stroke: "#3f8f67", "stroke-width": "4",
       class: "runner-pulse",
     })
   );
   svg.append(
     svgElement("circle", {
-      cx: runner.x, cy: runner.y, r: 13,
+      cx: runner.x, cy: runner.y, r: 14,
       fill: "#3f8f67", stroke: "#fff", "stroke-width": "5",
     })
   );
+
+  const runnerLabelBg = svgElement("rect", {
+    x: runner.x + 20,
+    y: runner.y - 34,
+    width: "150",
+    height: "48",
+    rx: "10",
+    fill: "#ffffff",
+    stroke: "#285b43",
+    "stroke-width": "2",
+    opacity: "0.96",
+  });
+  svg.append(runnerLabelBg);
+
+  const runnerLabel = svgElement("text", {
+    x: runner.x + 32,
+    y: runner.y - 14,
+    fill: "#15382b",
+    "font-weight": "900",
+    "font-size": "15",
+  });
+  runnerLabel.textContent = `Nate · mile ${getCourseMile(race, stations).toFixed(1)}`;
+  svg.append(runnerLabel);
+
+  const runnerTime = svgElement("text", {
+    x: runner.x + 32,
+    y: runner.y + 4,
+    fill: "#52615a",
+    "font-weight": "700",
+    "font-size": "12",
+  });
+  runnerTime.textContent = `Updated ${formatTime(new Date(race.latest.time))}`;
+  svg.append(runnerTime);
 
   const defaultView = { x: 0, y: 0, w: width, h: height };
   let view = { ...defaultView };
