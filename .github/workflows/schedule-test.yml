@@ -1,0 +1,16 @@
+name: Schedule Test
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "1,6,11,16,21,26,31,36,41,46,51,56 * * * *"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Confirm scheduled trigger
+        run: |
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Time: $(date -u)"
