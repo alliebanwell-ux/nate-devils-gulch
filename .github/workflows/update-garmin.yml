@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: garmin-tracker-update
+  group: garmin-tracker
   cancel-in-progress: false
 
 jobs:
@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -29,8 +29,6 @@ jobs:
         env:
           GARMIN_KML_URL: ${{ secrets.GARMIN_KML_URL }}
         run: |
-          test -n "$GARMIN_KML_URL"
-
           curl \
             --fail \
             --location \
@@ -38,35 +36,33 @@ jobs:
             --show-error \
             --retry 3 \
             --retry-delay 3 \
-            --connect-timeout 20 \
-            --max-time 60 \
+            --user-agent "Mozilla/5.0" \
             --header "Accept: application/vnd.google-earth.kml+xml,application/xml,text/xml,*/*" \
-            --user-agent "Mozilla/5.0 DevilGulchTracker/1.0" \
             "$GARMIN_KML_URL" \
-            --output feed.kml
+            -o feed.kml
 
           test -s feed.kml
           grep -qi "<kml" feed.kml
 
-      - name: Update tracker data
+      - name: Update tracker
         run: |
           python scripts/update_garmin.py \
             --kml feed.kml \
             --race race.json \
             --course course.json
 
-      - name: Commit updates
+      - name: Commit changes
         run: |
           rm -f feed.kml
 
-          if git diff --quiet -- race.json course.json; then
-            echo "No new Garmin point."
+          if git diff --quiet; then
+            echo "No changes."
             exit 0
           fi
 
-          git config user.name "garmin-tracker-bot"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
 
           git add race.json course.json
-          git commit -m "Update Garmin race position"
+          git commit -m "Automatic Garmin update"
           git push
