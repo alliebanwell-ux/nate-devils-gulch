@@ -1,16 +1,11 @@
 
 "use strict";
 
-const FALLBACK_RACE = {
-  runner:"Nate", race:"Devil’s Gulch 100",
-  latest:{time:"2026-07-11T09:31:00-07:00",lat:47.29816,lon:-120.51979,gpxMile:17.279,courseMileLabel:"17.3",section:"Tronsen Ridge loop",note:"Returning toward Mt. Lillian"},
-  baselineFinishText:"Sunday 1:30–2:30 PM",baselineFinishRange:"Sunday 12:30–4:00 PM",
-  finishCutoff:"2026-07-12T20:00:00-07:00",messageEmail:"",lastUpdatedLabel:"Saturday 9:31 AM"
-};
+const FALLBACK_RACE = {"runner":"Nate","race":"Devil’s Gulch 100","start":"2026-07-11T05:00:00-07:00","latest":{"time":"2026-07-11T16:48:00-07:00","lat":47.418526,"lon":-120.522873,"gpxMile":41.46582813546316,"courseMileLabel":"41.5","section":"Sand Creek → Mission Creek #1","note":"Left Sand Creek at 4:18 PM; climbing toward Mission Creek #1"},"checkins":[{"time":"2026-07-11T08:11:00-07:00","lat":47.3163,"lon":-120.49665,"gpxMile":12.519292439571823,"snapMeters":4.65775464476558,"segmentMph":null},{"time":"2026-07-11T09:31:00-07:00","lat":47.29816,"lon":-120.51979,"gpxMile":17.279270032854164,"snapMeters":41.04026597823736,"segmentMph":3.569983194961756},{"time":"2026-07-11T10:28:00-07:00","lat":47.291796,"lon":-120.545533,"gpxMile":20.82504938562506,"snapMeters":7.083444899471145,"segmentMph":3.7323993187062072,"deviceSpeedMph":3.74,"elevationFt":5031.3},{"time":"2026-07-11T11:20:00-07:00","lat":47.326891,"lon":-120.524976,"gpxMile":23.767282360887947,"snapMeters":2.0585288305550535,"segmentMph":3.394884202226407,"deviceSpeedMph":2.49,"elevationFt":5680.77},{"time":"2026-07-11T11:46:00-07:00","lat":47.33493,"lon":-120.52923,"gpxMile":24.44129755167908,"snapMeters":38.29475268824026,"segmentMph":1.5554196710564647},{"time":"2026-07-11T12:20:00-07:00","lat":47.368938,"lon":-120.550468,"gpxMile":27.249589490531363,"snapMeters":7.936008301958956,"segmentMph":4.955809303856968,"deviceSpeedMph":5.0,"elevationFt":4717.49},{"time":"2026-07-11T12:50:00-07:00","lat":47.386211,"lon":-120.572096,"gpxMile":29.042825256336325,"snapMeters":16.376030035444334,"segmentMph":3.5864715316099236,"deviceSpeedMph":3.11,"elevationFt":4577.66},{"time":"2026-07-11T14:00:00-07:00","lat":47.37819,"lon":-120.54469,"gpxMile":33.01780621205272,"snapMeters":13.039115997239572,"segmentMph":3.407126533471194},{"time":"2026-07-11T14:13:00-07:00","lat":47.38686,"lon":-120.54832,"gpxMile":33.68770859689552,"snapMeters":17.632910250105663,"segmentMph":3.091857160812922},{"time":"2026-07-11T16:04:00-07:00","lat":47.432066,"lon":-120.528946,"gpxMile":39.68007388236888,"snapMeters":46.10310562008304,"segmentMph":3.2391163705261414,"deviceSpeedMph":0.0,"elevationFt":1722.77},{"time":"2026-07-11T16:28:00-07:00","lat":47.424363,"lon":-120.526456,"gpxMile":40.52123153200915,"snapMeters":7.019807639344453,"segmentMph":2.1028941241006827,"deviceSpeedMph":3.11,"elevationFt":2001.41},{"time":"2026-07-11T16:48:00-07:00","lat":47.418526,"lon":-120.522873,"gpxMile":41.46582813546316,"snapMeters":11.82084691063926,"segmentMph":2.8337898103620276,"deviceSpeedMph":2.49,"elevationFt":2481.1}],"crewBase":{"name":"Avid Hotel Wenatchee","city":"Wenatchee, WA"},"messageEmail":"natethegood13@gmail.com","lastUpdatedLabel":"Saturday 4:48 PM","finishCutoff":"2026-07-12T20:00:00-07:00"};
 
 async function loadJSON(path, fallback){
   try{
-    const res = await fetch(path + "?v=" + Date.now(),{cache:"no-store"});
+    const res = await fetch(path + "?v=" + Date.now(), {cache:"no-store"});
     if(!res.ok) throw new Error(path+" "+res.status);
     return await res.json();
   }catch(err){
