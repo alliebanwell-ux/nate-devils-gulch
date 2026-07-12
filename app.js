@@ -10,7 +10,7 @@ const FALLBACK_RACE = {
 
 async function loadJSON(path, fallback){
   try{
-    const res = await fetch(path,{cache:"no-store"});
+    const res = await fetch(path + "?v=" + Date.now(),{cache:"no-store"});
     if(!res.ok) throw new Error(path+" "+res.status);
     return await res.json();
   }catch(err){

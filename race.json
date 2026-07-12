@@ -3,13 +3,13 @@
   "race": "Devil’s Gulch 100",
   "start": "2026-07-11T05:00:00-07:00",
   "latest": {
-    "time": "2026-07-11T14:13:00-07:00",
-    "lat": 47.38686,
-    "lon": -120.54832,
-    "gpxMile": 33.68770859689552,
-    "courseMileLabel": "33.7",
-    "section": "Tronsen → Sand Creek",
-    "note": "Heading toward Sand Creek"
+    "time": "2026-07-11T16:48:00-07:00",
+    "lat": 47.418526,
+    "lon": -120.522873,
+    "gpxMile": 41.46582813546316,
+    "courseMileLabel": "41.5",
+    "section": "Sand Creek → Mission Creek #1",
+    "note": "Left Sand Creek at 4:18 PM; climbing toward Mission Creek #1"
   },
   "checkins": [
     {
@@ -34,7 +34,9 @@
       "lon": -120.545533,
       "gpxMile": 20.82504938562506,
       "snapMeters": 7.083444899471145,
-      "segmentMph": 3.7323993187062072
+      "segmentMph": 3.7323993187062072,
+      "deviceSpeedMph": 3.74,
+      "elevationFt": 5031.3
     },
     {
       "time": "2026-07-11T11:20:00-07:00",
@@ -42,7 +44,9 @@
       "lon": -120.524976,
       "gpxMile": 23.767282360887947,
       "snapMeters": 2.0585288305550535,
-      "segmentMph": 3.394884202226407
+      "segmentMph": 3.394884202226407,
+      "deviceSpeedMph": 2.49,
+      "elevationFt": 5680.77
     },
     {
       "time": "2026-07-11T11:46:00-07:00",
@@ -58,7 +62,9 @@
       "lon": -120.550468,
       "gpxMile": 27.249589490531363,
       "snapMeters": 7.936008301958956,
-      "segmentMph": 4.955809303856968
+      "segmentMph": 4.955809303856968,
+      "deviceSpeedMph": 5.0,
+      "elevationFt": 4717.49
     },
     {
       "time": "2026-07-11T12:50:00-07:00",
@@ -66,7 +72,9 @@
       "lon": -120.572096,
       "gpxMile": 29.042825256336325,
       "snapMeters": 16.376030035444334,
-      "segmentMph": 3.5864715316099236
+      "segmentMph": 3.5864715316099236,
+      "deviceSpeedMph": 3.11,
+      "elevationFt": 4577.66
     },
     {
       "time": "2026-07-11T14:00:00-07:00",
@@ -83,6 +91,36 @@
       "gpxMile": 33.68770859689552,
       "snapMeters": 17.632910250105663,
       "segmentMph": 3.091857160812922
+    },
+    {
+      "time": "2026-07-11T16:04:00-07:00",
+      "lat": 47.432066,
+      "lon": -120.528946,
+      "gpxMile": 39.68007388236888,
+      "snapMeters": 46.10310562008304,
+      "segmentMph": 3.2391163705261414,
+      "deviceSpeedMph": 0.0,
+      "elevationFt": 1722.77
+    },
+    {
+      "time": "2026-07-11T16:28:00-07:00",
+      "lat": 47.424363,
+      "lon": -120.526456,
+      "gpxMile": 40.52123153200915,
+      "snapMeters": 7.019807639344453,
+      "segmentMph": 2.1028941241006827,
+      "deviceSpeedMph": 3.11,
+      "elevationFt": 2001.41
+    },
+    {
+      "time": "2026-07-11T16:48:00-07:00",
+      "lat": 47.418526,
+      "lon": -120.522873,
+      "gpxMile": 41.46582813546316,
+      "snapMeters": 11.82084691063926,
+      "segmentMph": 2.8337898103620276,
+      "deviceSpeedMph": 2.49,
+      "elevationFt": 2481.1
     }
   ],
   "crewBase": {
@@ -90,6 +128,6 @@
     "city": "Wenatchee, WA"
   },
   "messageEmail": "natethegood13@gmail.com",
-  "lastUpdatedLabel": "Saturday 2:13 PM",
+  "lastUpdatedLabel": "Saturday 4:48 PM",
   "finishCutoff": "2026-07-12T20:00:00-07:00"
 }
